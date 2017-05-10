@@ -2,9 +2,13 @@
 name = "zerofs"
 version = "0.1.0"
 authors = ["Alvaro Polo <apoloval@gmail.com>"]
+build = "build.rs"
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
 libc = "0.2.0"
+
+[build-dependencies]
+metadeps = "1"
