@@ -14,6 +14,7 @@ extern crate toml;
 
 mod config;
 mod zmq;
+mod zerofs;
 
 const CONFIG_FILE: &'static str = "Modules/zerofs.conf";
 
@@ -37,10 +38,12 @@ pub extern "stdcall" fn dll_start() {
     let settings = load_settings();
     init_logging(settings.logging);
     info!("Starting Avionica ZeroFS module");
+    zerofs::start_module();
 }
 
 #[cfg(windows)]
 #[export_name="DLLStop"]
 pub extern "stdcall" fn dll_stop() {
     info!("Stopping Avionica ZeroFS module");
+    zerofs::stop_module();
 }
