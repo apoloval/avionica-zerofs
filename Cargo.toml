@@ -9,6 +9,10 @@ crate-type = ["cdylib"]
 
 [dependencies]
 libc = "0.2.0"
+log = "0.3"
+log4rs = "0.3"
+rustc-serialize = "0.3"
+toml = "0.1"
 
 [build-dependencies]
 metadeps = "1"
