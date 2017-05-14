@@ -12,6 +12,7 @@ extern crate log4rs;
 extern crate rustc_serialize;
 extern crate toml;
 
+mod domain;
 mod config;
 mod zmq;
 mod zerofs;
