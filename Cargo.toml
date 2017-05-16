@@ -16,3 +16,6 @@ toml = "0.1"
 
 [build-dependencies]
 metadeps = "1"
+
+[package.metadata.pkg-config]
+libzmq = "3.2"
