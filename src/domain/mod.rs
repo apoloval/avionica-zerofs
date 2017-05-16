@@ -28,7 +28,7 @@ pub trait Worker : Send + Sized + 'static {
 
     fn work_loop(&mut self);
 
-    fn spawn(self) -> WorkerHandle {
+    fn spawn(self) -> ShutdownHandle {
         let stop_for_worker = Arc::new(AtomicBool::new(false));
         let stop_for_handle = stop_for_worker.clone();
         let thread_handle = thread::spawn(move || {
@@ -37,22 +37,22 @@ pub trait Worker : Send + Sized + 'static {
                 worker.work_loop();
             }
         });
-        WorkerHandle {
+        ShutdownHandle {
             stop: stop_for_handle,
             thread_handle: thread_handle
         }
     }
 }
 
-/// The worker handle resulting from calling `Worker::spawn()`. It can be
-/// used to stop the worker.
-pub struct WorkerHandle {
+/// The shutdown handle resulting from calling `Worker::spawn()`. It can be
+/// used to shut the worker down.
+pub struct ShutdownHandle {
     stop: Arc<AtomicBool>,
     thread_handle: thread::JoinHandle<()>,
 }
 
-impl WorkerHandle {
-    pub fn stop(self) {
+impl ShutdownHandle {
+    pub fn shutdown(self) {
         self.stop.store(true, Ordering::Relaxed);
         if self.thread_handle.join().is_err() {
             error!("unexpected error while joining worker thread");
@@ -75,7 +75,7 @@ mod test {
         let handle = worker.spawn();
 
         thread::sleep(Duration::from_millis(10));
-        handle.stop();
+        handle.shutdown();
         assert!(counter.load(Ordering::Relaxed) > 0);
     }
 
