@@ -57,6 +57,12 @@ pub struct Socket<'a> {
 }
 
 impl<'a> Socket<'a> {
+    pub fn bind<T: AsRef<str>>(&mut self, endpoint: T) -> Result<()> {
+        let raw_endpoint = CString::new(endpoint.as_ref().as_bytes()).ok().unwrap();
+        zmq_try!(ffi::zmq_bind(self.raw_socket, raw_endpoint.as_ptr()));
+        Ok({})
+    }
+
     pub fn connect<T: AsRef<str>>(&mut self, endpoint: T) -> Result<()> {
         let raw_endpoint = CString::new(endpoint.as_ref().as_bytes()).ok().unwrap();
         zmq_try!(ffi::zmq_connect(self.raw_socket, raw_endpoint.as_ptr()));
@@ -86,5 +92,12 @@ mod test {
         let ctx = Context::new().ok().unwrap();
         let mut pub_socket = ctx.socket(SocketType::PUB).ok().unwrap();
         assert!(pub_socket.connect("tcp://localhost:5555").is_ok());
+    }
+
+    #[test]
+    fn test_socket_binding() {
+        let ctx = Context::new().ok().unwrap();
+        let mut pub_socket = ctx.socket(SocketType::PUB).ok().unwrap();
+        assert!(pub_socket.bind("tcp://*:5555").is_ok());
     }
 }
