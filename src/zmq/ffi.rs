@@ -42,7 +42,9 @@ use libc::*;
 #[link(name = "zmq")]
 extern {
     pub fn zmq_bind(socket: *mut c_void, endpoint: *const c_char) -> c_int;
+    pub fn zmq_close(socket: *mut c_void) -> c_int;
     pub fn zmq_connect(socket: *mut c_void, endpoint: *const c_char) -> c_int;
+    pub fn zmq_ctx_destroy(context: *mut c_void) -> c_int;
     pub fn zmq_ctx_new() -> *mut c_void;
     pub fn zmq_errno() -> c_int;
     pub fn zmq_socket(context: *mut c_void, socket_type: c_int) -> *mut c_void;

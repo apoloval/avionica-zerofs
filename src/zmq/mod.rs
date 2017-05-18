@@ -44,6 +44,12 @@ impl Context {
     }
 }
 
+impl Drop for Context {
+    fn drop(&mut self) {
+        unsafe { ffi::zmq_ctx_destroy(self.raw_context); }
+    }
+}
+
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum SocketType {
@@ -67,6 +73,12 @@ impl<'a> Socket<'a> {
         let raw_endpoint = CString::new(endpoint.as_ref().as_bytes()).ok().unwrap();
         zmq_try!(ffi::zmq_connect(self.raw_socket, raw_endpoint.as_ptr()));
         Ok({})
+    }
+}
+
+impl<'a> Drop for Socket<'a> {
+    fn drop(&mut self) {
+        unsafe { ffi::zmq_close(self.raw_socket); }
     }
 }
 
