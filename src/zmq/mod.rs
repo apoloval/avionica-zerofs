@@ -6,9 +6,27 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::result;
+use std::ffi::CString;
+
 use libc::*;
 
 mod ffi;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Error(c_int);
+
+pub type Result<T> = result::Result<T, Error>;
+
+macro_rules! zmq_try {
+    ($($tt:tt)*) => {{
+        let rc = $($tt)*;
+        if rc == -1 {
+            return Err(Error(unsafe { ffi::zmq_errno() }));
+        }
+        rc
+    }}
+}
 
 pub struct Context {
     raw_context: *mut c_void
@@ -27,7 +45,7 @@ impl Context {
         unsafe {
             from_raw_resource(
                 ffi::zmq_socket(self.raw_context, socket_type as c_int),
-                |raw| Socket { _context: &self, _raw_socket: raw })
+                |raw| Socket { _context: &self, raw_socket: raw })
         }
     }
 }
@@ -41,7 +59,15 @@ pub enum SocketType {
 
 pub struct Socket<'a> {
     _context: &'a Context,
-    _raw_socket: *mut c_void,
+    raw_socket: *mut c_void,
+}
+
+impl<'a> Socket<'a> {
+    pub fn connect<T: AsRef<str>>(&mut self, endpoint: T) -> Result<()> {
+        let raw_endpoint = CString::new(endpoint.as_ref().as_bytes()).ok().unwrap();
+        zmq_try!(unsafe { ffi::zmq_connect(self.raw_socket, raw_endpoint.as_ptr()) });
+        Ok({})
+    }
 }
 
 fn from_raw_resource<T, F: FnOnce(*mut c_void) -> T>(raw: *mut c_void, f: F) -> Option<T> {
@@ -64,5 +90,12 @@ mod test {
         let ctx = Context::new().unwrap();
         assert!(ctx.socket(SocketType::PUB).is_some());
         assert!(ctx.socket(SocketType::SUB).is_some());
+    }
+
+    #[test]
+    fn test_socket_connection() {
+        let ctx = Context::new().unwrap();
+        let mut pub_socket = ctx.socket(SocketType::PUB).unwrap();
+        assert!(pub_socket.connect("tcp://localhost:5555").is_ok());
     }
 }
