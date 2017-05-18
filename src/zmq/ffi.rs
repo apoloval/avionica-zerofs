@@ -11,4 +11,5 @@ use libc::*;
 #[link(name = "zmq")]
 extern {
     pub fn zmq_ctx_new() -> *mut c_void;
+    pub fn zmq_socket(context: *mut c_void, socket_type: c_int) -> *mut c_void;
 }
