@@ -20,8 +20,8 @@ pub type Result<T> = result::Result<T, Error>;
 
 macro_rules! zmq_try {
     ($($tt:tt)*) => {{
-        let rc = $($tt)*;
-        if rc == -1 {
+        let rc = unsafe { $($tt)* };
+        if (rc as isize) == -1 {
             return Err(Error(unsafe { ffi::zmq_errno() }));
         }
         rc
@@ -33,20 +33,14 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new() -> Option<Context> {
-        unsafe {
-            from_raw_resource(
-                ffi::zmq_ctx_new(),
-                |raw| Context { raw_context: raw })
-        }
+    pub fn new() -> Result<Context> {
+        let raw = zmq_try!(ffi::zmq_ctx_new());
+        Ok(Context { raw_context: raw })
     }
 
-    pub fn socket(&self, socket_type: SocketType) -> Option<Socket> {
-        unsafe {
-            from_raw_resource(
-                ffi::zmq_socket(self.raw_context, socket_type as c_int),
-                |raw| Socket { _context: &self, raw_socket: raw })
-        }
+    pub fn socket(&self, socket_type: SocketType) -> Result<Socket> {
+        let raw = zmq_try!(ffi::zmq_socket(self.raw_context, socket_type as c_int));
+        Ok(Socket { _context: &self, raw_socket: raw })
     }
 }
 
@@ -65,14 +59,9 @@ pub struct Socket<'a> {
 impl<'a> Socket<'a> {
     pub fn connect<T: AsRef<str>>(&mut self, endpoint: T) -> Result<()> {
         let raw_endpoint = CString::new(endpoint.as_ref().as_bytes()).ok().unwrap();
-        zmq_try!(unsafe { ffi::zmq_connect(self.raw_socket, raw_endpoint.as_ptr()) });
+        zmq_try!(ffi::zmq_connect(self.raw_socket, raw_endpoint.as_ptr()));
         Ok({})
     }
-}
-
-fn from_raw_resource<T, F: FnOnce(*mut c_void) -> T>(raw: *mut c_void, f: F) -> Option<T> {
-    if (raw as isize) != -1 { Some(f(raw)) }
-    else { None }
 }
 
 #[cfg(test)]
@@ -82,20 +71,20 @@ mod test {
 
     #[test]
     fn test_context_creation() {
-        assert!(Context::new().is_some());
+        assert!(Context::new().is_ok());
     }
 
     #[test]
     fn test_socket_creation() {
-        let ctx = Context::new().unwrap();
-        assert!(ctx.socket(SocketType::PUB).is_some());
-        assert!(ctx.socket(SocketType::SUB).is_some());
+        let ctx = Context::new().ok().unwrap();
+        assert!(ctx.socket(SocketType::PUB).is_ok());
+        assert!(ctx.socket(SocketType::SUB).is_ok());
     }
 
     #[test]
     fn test_socket_connection() {
-        let ctx = Context::new().unwrap();
-        let mut pub_socket = ctx.socket(SocketType::PUB).unwrap();
+        let ctx = Context::new().ok().unwrap();
+        let mut pub_socket = ctx.socket(SocketType::PUB).ok().unwrap();
         assert!(pub_socket.connect("tcp://localhost:5555").is_ok());
     }
 }
