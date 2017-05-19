@@ -6,15 +6,25 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use std::result;
 use std::ffi::CString;
+use std::result;
+use std::string::FromUtf8Error;
 
 use libc::*;
 
 mod ffi;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Error(c_int);
+pub enum Error {
+    BadMsg { bytes: Vec<u8> },
+    BadOp(c_int),
+}
+
+impl From<FromUtf8Error> for Error {
+    fn from(error: FromUtf8Error) -> Self {
+        Error::BadMsg { bytes: error.into_bytes() }
+    }
+}
 
 pub type Result<T> = result::Result<T, Error>;
 
@@ -22,7 +32,8 @@ macro_rules! zmq_try {
     ($e:expr) => {{
         let rc = unsafe { $e };
         if (rc as isize) == -1 {
-            return Err(Error(unsafe { ffi::zmq_errno() }));
+            let error_code = unsafe { ffi::zmq_errno() };
+            return Err(Error::BadOp(error_code));
         }
         rc
     }}
@@ -83,6 +94,33 @@ impl<'a> Socket<'a> {
         self.send_with_opts(data, true)
     }
 
+    pub fn recv<T: AsMut<[u8]>>(&mut self, mut data: T) -> Result<bool> {
+        let mut buffer: &mut [u8] = data.as_mut();
+        let nbytes = buffer.len();
+        let rc = unsafe {
+            ffi::zmq_recv(
+                self.raw_socket,
+                buffer.as_ptr() as *mut c_void,
+                nbytes,
+                ffi::ZMQ_DONTWAIT)
+        };
+        if (rc as isize) == -1 {
+            let error_code = unsafe { ffi::zmq_errno() };
+            if error_code == ffi::errno::EAGAIN { return Ok(false) }
+            else { return Err(Error::BadOp(error_code)) }
+        }
+        Ok(true)
+    }
+
+    pub fn recv_string(&mut self) -> Result<Option<String>> {
+        let mut buffer: Vec<u8> = Vec::with_capacity(1024);
+        if self.recv(&mut buffer)? {
+            Ok(Some(String::from_utf8(buffer)?))
+        } else {
+            Ok(None)
+        }
+    }
+
     fn send_with_opts<T: AsRef<[u8]>>(&mut self, data: T, send_more: bool) -> Result<()> {
         let buffer: &[u8] = data.as_ref();
         let nbytes = buffer.len();
@@ -140,5 +178,13 @@ mod test {
         assert!(pub_socket.bind("tcp://*:5556").is_ok());
         assert!(pub_socket.send_part("foobar").is_ok());
         assert!(pub_socket.send("Hello World!").is_ok());
+    }
+
+    #[test]
+    fn test_socket_recv() {
+        let ctx = Context::new().ok().unwrap();
+        let mut pub_socket = ctx.socket(SocketType::SUB).ok().unwrap();
+        assert!(pub_socket.bind("tcp://*:5557").is_ok());
+        assert!(pub_socket.recv_string().is_ok());
     }
 }

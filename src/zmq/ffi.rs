@@ -39,6 +39,7 @@ pub mod errno {
 
 use libc::*;
 
+pub const ZMQ_DONTWAIT: c_int = 1;
 pub const ZMQ_SNDMORE: c_int = 2;
 
 #[link(name = "zmq")]
@@ -49,6 +50,7 @@ extern {
     pub fn zmq_ctx_destroy(context: *mut c_void) -> c_int;
     pub fn zmq_ctx_new() -> *mut c_void;
     pub fn zmq_errno() -> c_int;
+    pub fn zmq_recv(socket: *mut c_void, buffer: *mut c_void, len: size_t, flags: c_int) -> c_int;
     pub fn zmq_send(socket: *mut c_void, buffer: *const c_void, len: size_t, flags: c_int) -> c_int;
     pub fn zmq_socket(context: *mut c_void, socket_type: c_int) -> *mut c_void;
 }
