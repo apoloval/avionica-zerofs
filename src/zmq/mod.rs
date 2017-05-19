@@ -74,6 +74,26 @@ impl<'a> Socket<'a> {
         zmq_try!(ffi::zmq_connect(self.raw_socket, raw_endpoint.as_ptr()));
         Ok({})
     }
+
+    pub fn send<T: AsRef<[u8]>>(&mut self, data: T) -> Result<()> {
+        self.send_with_opts(data, false)
+    }
+
+    pub fn send_part<T: AsRef<[u8]>>(&mut self, data: T) -> Result<()> {
+        self.send_with_opts(data, true)
+    }
+
+    fn send_with_opts<T: AsRef<[u8]>>(&mut self, data: T, send_more: bool) -> Result<()> {
+        let buffer: &[u8] = data.as_ref();
+        let nbytes = buffer.len();
+        let flags = if send_more { ffi::ZMQ_SNDMORE } else { 1 };
+        zmq_try!(ffi::zmq_send(
+            self.raw_socket,
+            buffer.as_ptr() as *const c_void,
+            nbytes,
+            flags));
+        Ok({})
+    }
 }
 
 impl<'a> Drop for Socket<'a> {
@@ -111,5 +131,14 @@ mod test {
         let ctx = Context::new().ok().unwrap();
         let mut pub_socket = ctx.socket(SocketType::PUB).ok().unwrap();
         assert!(pub_socket.bind("tcp://*:5555").is_ok());
+    }
+
+    #[test]
+    fn test_socket_send() {
+        let ctx = Context::new().ok().unwrap();
+        let mut pub_socket = ctx.socket(SocketType::PUB).ok().unwrap();
+        assert!(pub_socket.bind("tcp://*:5556").is_ok());
+        assert!(pub_socket.send_part("foobar").is_ok());
+        assert!(pub_socket.send("Hello World!").is_ok());
     }
 }
