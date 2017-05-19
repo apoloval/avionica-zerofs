@@ -106,7 +106,7 @@ impl<'a> Socket<'a> {
         };
         if (rc as isize) == -1 {
             let error_code = unsafe { ffi::zmq_errno() };
-            if error_code == ffi::errno::EAGAIN { return Ok(false) }
+            if error_code == ffi::ERRNO_EAGAIN { return Ok(false) }
             else { return Err(Error::BadOp(error_code)) }
         }
         Ok(true)
