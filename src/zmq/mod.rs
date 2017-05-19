@@ -19,8 +19,8 @@ pub struct Error(c_int);
 pub type Result<T> = result::Result<T, Error>;
 
 macro_rules! zmq_try {
-    ($($tt:tt)*) => {{
-        let rc = unsafe { $($tt)* };
+    ($e:expr) => {{
+        let rc = unsafe { $e };
         if (rc as isize) == -1 {
             return Err(Error(unsafe { ffi::zmq_errno() }));
         }
