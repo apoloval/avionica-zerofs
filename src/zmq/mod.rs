@@ -86,11 +86,11 @@ impl<'a> Socket<'a> {
         Ok({})
     }
 
-    pub fn send<T: AsRef<[u8]>>(&mut self, data: T) -> Result<()> {
+    pub fn send<T: AsRef<[u8]>>(&mut self, data: T) -> Result<usize> {
         self.send_with_opts(data, false)
     }
 
-    pub fn send_part<T: AsRef<[u8]>>(&mut self, data: T) -> Result<()> {
+    pub fn send_part<T: AsRef<[u8]>>(&mut self, data: T) -> Result<usize> {
         self.send_with_opts(data, true)
     }
 
@@ -121,16 +121,16 @@ impl<'a> Socket<'a> {
         }
     }
 
-    fn send_with_opts<T: AsRef<[u8]>>(&mut self, data: T, send_more: bool) -> Result<()> {
+    fn send_with_opts<T: AsRef<[u8]>>(&mut self, data: T, send_more: bool) -> Result<usize> {
         let buffer: &[u8] = data.as_ref();
         let nbytes = buffer.len();
         let flags = if send_more { ffi::ZMQ_SNDMORE } else { 1 };
-        zmq_try!(ffi::zmq_send(
+        let nbytes = zmq_try!(ffi::zmq_send(
             self.raw_socket,
             buffer.as_ptr() as *const c_void,
             nbytes,
             flags));
-        Ok({})
+        Ok(nbytes as usize)
     }
 }
 
@@ -176,15 +176,15 @@ mod test {
         let ctx = Context::new().ok().unwrap();
         let mut pub_socket = ctx.socket(SocketType::PUB).ok().unwrap();
         assert!(pub_socket.bind("tcp://*:5556").is_ok());
-        assert!(pub_socket.send_part("foobar").is_ok());
-        assert!(pub_socket.send("Hello World!").is_ok());
+        assert_eq!(Ok(6), pub_socket.send_part("foobar"));
+        assert_eq!(Ok(12), pub_socket.send("Hello World!"));
     }
 
     #[test]
     fn test_socket_recv() {
         let ctx = Context::new().ok().unwrap();
-        let mut pub_socket = ctx.socket(SocketType::SUB).ok().unwrap();
-        assert!(pub_socket.bind("tcp://*:5557").is_ok());
-        assert!(pub_socket.recv_string().is_ok());
+        let mut sub_socket = ctx.socket(SocketType::SUB).ok().unwrap();
+        assert!(sub_socket.bind("tcp://*:5557").is_ok());
+        assert!(sub_socket.recv_string().is_ok());
     }
 }
