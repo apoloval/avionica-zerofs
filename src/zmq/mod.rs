@@ -94,7 +94,7 @@ impl<'a> Socket<'a> {
         self.send_with_opts(data, true)
     }
 
-    pub fn recv<T: AsMut<[u8]>>(&mut self, mut data: T) -> Result<bool> {
+    pub fn recv<T: AsMut<[u8]>>(&mut self, mut data: T) -> Result<usize> {
         let mut buffer: &mut [u8] = data.as_mut();
         let nbytes = buffer.len();
         let rc = unsafe {
@@ -106,19 +106,36 @@ impl<'a> Socket<'a> {
         };
         if (rc as isize) == -1 {
             let error_code = unsafe { ffi::zmq_errno() };
-            if error_code == ffi::ERRNO_EAGAIN { return Ok(false) }
+            if error_code == ffi::ERRNO_EAGAIN { return Ok(0) }
             else { return Err(Error::BadOp(error_code)) }
         }
-        Ok(true)
+        Ok(rc as usize)
     }
 
     pub fn recv_string(&mut self) -> Result<Option<String>> {
-        let mut buffer: Vec<u8> = Vec::with_capacity(1024);
-        if self.recv(&mut buffer)? {
+        let mut buffer: Vec<u8> = vec![0; 1024];
+        let bytes_read = self.recv(&mut buffer)?;
+        if bytes_read > 0 {
+            unsafe { buffer.set_len(bytes_read) };
             Ok(Some(String::from_utf8(buffer)?))
         } else {
             Ok(None)
         }
+    }
+
+    pub fn subscribe<T: AsRef<str>>(&mut self, topic: T) -> Result<()> {
+        let len = topic.as_ref().len();
+        let raw_topic = CString::new(topic.as_ref().as_bytes()).ok().unwrap();
+        zmq_try!(ffi::zmq_setsockopt(
+            self.raw_socket,
+            ffi::ZMQ_SUBSCRIBE,
+            raw_topic.as_ptr() as *const c_void,
+            len));
+        Ok({})
+    }
+
+    pub fn subscribe_all(&mut self) -> Result<()> {
+        self.subscribe("")
     }
 
     fn send_with_opts<T: AsRef<[u8]>>(&mut self, data: T, send_more: bool) -> Result<usize> {
@@ -142,6 +159,9 @@ impl<'a> Drop for Socket<'a> {
 
 #[cfg(test)]
 mod test {
+
+    use std::thread;
+    use std::time::Duration;
 
     use super::*;
 
@@ -186,5 +206,20 @@ mod test {
         let mut sub_socket = ctx.socket(SocketType::SUB).ok().unwrap();
         assert!(sub_socket.bind("tcp://*:5557").is_ok());
         assert!(sub_socket.recv_string().is_ok());
+    }
+
+    #[test]
+    fn test_pub_sub_integration() {
+        let ctx = Context::new().ok().unwrap();
+        let mut pub_socket = ctx.socket(SocketType::PUB).ok().unwrap();
+        let mut sub_socket = ctx.socket(SocketType::SUB).ok().unwrap();
+        assert!(sub_socket.subscribe_all().is_ok());
+        assert!(pub_socket.bind("tcp://*:5558").is_ok());
+        assert!(sub_socket.connect("tcp://localhost:5558").is_ok());
+        thread::sleep(Duration::from_millis(50));
+
+        assert_eq!(Ok(12), pub_socket.send("Hello World!"));
+        thread::sleep(Duration::from_millis(50));
+        assert_eq!(Ok(Some("Hello World!".to_string())), sub_socket.recv_string());
     }
 }
