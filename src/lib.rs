@@ -6,14 +6,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-extern crate libc;
 #[macro_use] extern crate log;
+#[macro_use] extern crate serde_derive;
+
+extern crate libc;
 extern crate log4rs;
-extern crate rustc_serialize;
+extern crate serde;
 extern crate toml;
 
 mod config;
-mod zmq;
 
 const CONFIG_FILE: &'static str = "Modules/zerofs.conf";
 
