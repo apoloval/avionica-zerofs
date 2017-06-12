@@ -6,6 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::error::{Error as StdError};
 use std::fs;
 use std::io;
 use std::io::Read;
@@ -15,51 +16,50 @@ use std::result;
 use log::LogLevelFilter;
 use log4rs;
 use log4rs::pattern::PatternLayout;
-use rustc_serialize::*;
+use serde;
+use serde::{Deserialize, Deserializer};
 use toml;
 
-const DEFAULT_LOGGING_LEVEL: LogLevelFilter = LogLevelFilter::Info;
-const DEFAULT_LOGGING_PATTERN: &'static str = "%d{%Y/%m/%d %H:%M:%S.%f} - [%l] [%M]: %m";
-const DEFAULT_LOGGING_FILE: &'static str = "Modules/zerofs.log";
 
-pub enum Error {
-    CannotParse,
-    CannotDecode,
-}
+#[derive(Debug)]
+pub struct Error(String);
 
 pub type Result<T> = result::Result<T, Error>;
 
+#[derive(Deserialize)]
 pub struct LoggingSettings {
+    #[serde(default = "LoggingSettings::default_logging_level",
+            deserialize_with = "deserialize_log_level_filter")]
     pub level: LogLevelFilter,
+
+    #[serde(default = "LoggingSettings::default_pattern_layout",
+            deserialize_with = "deserialize_pattern_layout")]
     pub pattern: PatternLayout,
+
+    #[serde(default = "LoggingSettings::default_logging_file")]
     pub file: String,
 }
 
-impl Decodable for LoggingSettings {
-    fn decode<D: Decoder>(d: &mut D) -> result::Result<Self, D::Error> {
-        let mut result = LoggingSettings::default();
-        if let Ok(level_str) = d.read_struct_field("level", 0, |d| d.read_str()) {
-            result.level = try!(level_str
-                .parse()
-                .map_err(|_| d.error(&format!("unknown log level '{}'", level_str))));
-        }
-        if let Ok(pattern) = d.read_struct_field("pattern", 0, |d| d.read_str()) {
-            result.pattern = try!(PatternLayout::new(&pattern)
-                .map_err(|_| d.error(&format!("invalid log pattern in '{}'", pattern))));
-        }
-        if let Ok(file) = d.read_struct_field("file", 0, |d| d.read_str()) {
-            result.file = file;
-        }
-        Ok(result)
+impl LoggingSettings {
+    pub fn default_logging_level() -> LogLevelFilter {
+        LogLevelFilter::Info
+    }
+
+    pub fn default_pattern_layout() -> PatternLayout {
+        PatternLayout::new("%d{%Y/%m/%d %H:%M:%S.%f} - [%l] [%M]: %m").unwrap()
+    }
+
+    pub fn default_logging_file() -> String {
+        "Modules/zerofs.log".to_string()
     }
 }
 
 impl Default for LoggingSettings {
     fn default() -> LoggingSettings {
         LoggingSettings {
-            level: DEFAULT_LOGGING_LEVEL,
-            pattern: PatternLayout::new(DEFAULT_LOGGING_PATTERN).unwrap(),
-            file: DEFAULT_LOGGING_FILE.to_string(),
+            level: Self::default_logging_level(),
+            pattern: Self::default_pattern_layout(),
+            file: Self::default_logging_file(),
         }
     }
 }
@@ -84,9 +84,9 @@ impl From<LoggingSettings> for log4rs::config::Config {
     }
 }
 
-
-
+#[derive(Deserialize)]
 pub struct Settings {
+    #[serde(default)]
     pub logging: LoggingSettings,
 }
 
@@ -94,7 +94,7 @@ impl Settings {
     pub fn from_toml_file<P: AsRef<Path>>(path: P) -> io::Result<Settings> {
         let mut file = try!(fs::File::open(&path));
         let mut content = String::with_capacity(10*1024);
-        try!(file.read_to_string(&mut content));
+        file.read_to_string(&mut content)?;
         Self::from_toml(&content)
             .map_err(|_| io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -102,14 +102,7 @@ impl Settings {
     }
 
     pub fn from_toml(toml: &str) -> Result<Settings> {
-        let mut table = try!(toml::Parser::new(toml).parse().ok_or(Error::CannotParse));
-        let logging =  match table.remove("logging") {
-            Some(section) => try!(toml::decode(section).ok_or(Error::CannotDecode)),
-            None => LoggingSettings::default(),
-        };
-        Ok(Settings {
-            logging: logging,
-        })
+        toml::from_str(toml).map_err(|e| Error(e.description().to_string()))
     }
 }
 
@@ -121,6 +114,26 @@ impl Default for Settings {
     }
 }
 
+fn deserialize_log_level_filter<'de, D>(deserializer: D) -> result::Result<LogLevelFilter, D::Error>
+    where D: Deserializer<'de>
+{
+    let s = String::deserialize(deserializer)?.to_lowercase();
+    match s.as_ref() {
+        "off" => Ok(LogLevelFilter::Off),
+        "error" => Ok(LogLevelFilter::Error),
+        "warn" => Ok(LogLevelFilter::Warn),
+        "info" => Ok(LogLevelFilter::Info),
+        "debug" => Ok(LogLevelFilter::Debug),
+        "trace" => Ok(LogLevelFilter::Trace),
+        other => Err(serde::de::Error::custom(format!("unknown log level filter {}", other))),
+    }
+}
+fn deserialize_pattern_layout<'de, D>(deserializer: D) -> result::Result<PatternLayout, D::Error>
+    where D: Deserializer<'de>
+{
+    let s = String::deserialize(deserializer)?;
+    PatternLayout::new(&s).map_err(serde::de::Error::custom)
+}
 
 #[cfg(test)]
 mod tests {
@@ -131,7 +144,7 @@ mod tests {
 
     #[test]
     fn should_load_defaults_from_empty_toml() {
-        let s = Settings::from_toml("").ok().unwrap();
+        let s = Settings::from_toml("").unwrap();
         assert_eq!(s.logging.level, LogLevelFilter::Info);
     }
 
@@ -139,7 +152,7 @@ mod tests {
     fn should_load_logging_defaults_from_empty_section() {
         let s = Settings::from_toml(r#"
         	[logging]
-        	"#).ok().unwrap();
+        	"#).unwrap();
         assert_eq!(s.logging.level, LogLevelFilter::Info);
     }
 
@@ -148,17 +161,17 @@ mod tests {
         let s = Settings::from_toml(r#"
         	[logging]
         	level = "DEBUG"
-        	"#).ok().unwrap();
+        	"#).unwrap();
         assert_eq!(s.logging.level, LogLevelFilter::Debug);
         let s = Settings::from_toml(r#"
         	[logging]
         	level = "warn"
-        	"#).ok().unwrap();
+        	"#).unwrap();
         assert_eq!(s.logging.level, LogLevelFilter::Warn);
         let s = Settings::from_toml(r#"
         	[logging]
         	level = "Trace"
-        	"#).ok().unwrap();
+        	"#).unwrap();
         assert_eq!(s.logging.level, LogLevelFilter::Trace);
     }
 
@@ -167,10 +180,10 @@ mod tests {
         let s = Settings::from_toml(r#"
         	[logging]
         	pattern = "the-pattern"
-        	"#).ok().unwrap();
+        	"#).unwrap();
         assert_eq!(
-        format!("{:?}", s.logging.pattern),
-        r#"PatternLayout { pattern: [Text("the-pattern")] }"#);
+            format!("{:?}", s.logging.pattern),
+            r#"PatternLayout { pattern: [Text("the-pattern")] }"#);
     }
 
     #[test]
@@ -178,7 +191,7 @@ mod tests {
         let s = Settings::from_toml(r#"
         	[logging]
         	file = "/path/to/log/file"
-        	"#).ok().unwrap();
+        	"#).unwrap();
         assert_eq!(s.logging.file, "/path/to/log/file");
     }
 }
