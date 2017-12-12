@@ -11,6 +11,7 @@
 
 extern crate libc;
 extern crate log4rs;
+extern crate nanomsg;
 extern crate serde;
 extern crate toml;
 

@@ -1,0 +1,7 @@
+[target.i686-pc-windows-msvc.nanomsg]
+rustc-link-lib = ["static=nanomsg", "ws2_32", "mswsock", "advapi32"]
+rustc-link-search = ["deps/win32/lib/"]
+
+[target.x86_64-pc-windows-msvc.nanomsg]
+rustc-link-lib = ["static=nanomsg", "ws2_32", "mswsock", "advapi32"]
+rustc-link-search = ["deps/win64/lib/"]
