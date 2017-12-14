@@ -16,6 +16,7 @@ extern crate serde;
 extern crate toml;
 
 mod config;
+mod channel;
 
 const CONFIG_FILE: &'static str = "Modules/zerofs.conf";
 
