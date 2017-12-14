@@ -9,6 +9,7 @@
 #[macro_use] extern crate log;
 #[macro_use] extern crate serde_derive;
 
+extern crate byteorder;
 extern crate libc;
 extern crate log4rs;
 extern crate nanomsg;
@@ -17,6 +18,7 @@ extern crate toml;
 
 mod config;
 mod channel;
+mod msg;
 
 const CONFIG_FILE: &'static str = "Modules/zerofs.conf";
 

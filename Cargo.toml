@@ -7,6 +7,7 @@ authors = ["Alvaro Polo <apoloval@gmail.com>"]
 crate-type = ["cdylib"]
 
 [dependencies]
+byteorder = "1.2"
 libc = "0.2.0"
 log = "0.3"
 log4rs = "0.3"
