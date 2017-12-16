@@ -18,7 +18,7 @@ extern crate toml;
 
 mod config;
 mod channel;
-mod msg;
+mod event;
 
 const CONFIG_FILE: &'static str = "Modules/zerofs.conf";
 
@@ -36,12 +36,26 @@ fn init_logging(settings: config::LoggingSettings) {
     log4rs::init_config(log4rs::config::Config::from(settings)).unwrap();
 }
 
+macro_rules! init {
+    ($e:expr) => {
+        match $e {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Initialization error: {}", e);
+                return
+            },
+        }
+    };
+}
+
 #[cfg(windows)]
 #[export_name="DLLStart"]
 pub extern "stdcall" fn dll_start() {
     let settings = load_settings();
     init_logging(settings.logging);
     info!("Starting Avionica ZeroFS module");
+
+    let _pub_chan = init!(channel::nano::PubChannel::bind("tcp://localhost:9000"));
 }
 
 #[cfg(windows)]
