@@ -2,7 +2,9 @@ use std::io;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-#[derive(Debug, PartialEq)]
+mod input;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Id(u16);
 
 impl Id {
@@ -15,7 +17,7 @@ impl Id {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Value(i32);
 
 impl Value {
@@ -28,10 +30,10 @@ impl Value {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Event {
-    id: Id,
-    value: Value,
+    pub id: Id,
+    pub value: Value,
 }
 
 impl Event {
