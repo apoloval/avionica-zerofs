@@ -19,6 +19,7 @@ extern crate toml;
 mod config;
 mod channel;
 mod event;
+mod utils;
 
 const CONFIG_FILE: &'static str = "Modules/zerofs.conf";
 
